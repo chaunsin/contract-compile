@@ -133,13 +133,31 @@ func (c *dockerClient) Execute(ctx context.Context, args cmd.Args) error {
 		}
 	)
 
-	// 拉取镜像
-	reader, err := c.cli.ImagePull(ctx, args.Images.String(), types.ImagePullOptions{})
+	// 判断镜像是否存在不存在则拉取镜像
+	_, _, err = c.cli.ImageInspectWithRaw(ctx, args.Images.String())
 	if err != nil {
-		return fmt.Errorf("ImagePull(%s): %w", args.Images.String(), err)
+		if client.IsErrNotFound(err) {
+			// 拉取镜像
+			reader, err := c.cli.ImagePull(ctx, args.Images.String(), types.ImagePullOptions{})
+			if err != nil {
+				return fmt.Errorf("ImagePull(%s): %w", args.Images.String(), err)
+			}
+			defer reader.Close()
+			// io.Copy(os.Stdout, reader)
+			info, _ := io.ReadAll(reader)
+			log.Printf("CompileContract ImagePull:%s", string(info))
+		} else {
+			return fmt.Errorf("ImageInspectWithRaw(%s): %w", args.Images.String(), err)
+		}
 	}
-	defer reader.Close()
-	io.Copy(os.Stdout, reader)
+
+	// // 拉取镜像
+	// reader, err := c.cli.ImagePull(ctx, args.Images.String(), types.ImagePullOptions{})
+	// if err != nil {
+	//	return fmt.Errorf("ImagePull(%s): %w", args.Images.String(), err)
+	// }
+	// defer reader.Close()
+	// io.Copy(os.Stdout, reader)
 
 	// 创建容器
 	resp, err := c.cli.ContainerCreate(ctx, contain, hostConfig, nil, nil, name)
@@ -164,13 +182,13 @@ func (c *dockerClient) Execute(ctx context.Context, args cmd.Args) error {
 	case w := <-wait:
 		fmt.Printf("ContainerWait: %+v\n", w)
 	case e := <-werr:
-		panic(e)
+		return fmt.Errorf("ContainerWait: %w", e)
 	}
 
 	// 查看容器日志
 	out, err := c.cli.ContainerLogs(ctx, name, types.ContainerLogsOptions{ShowStdout: true})
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("ContainerLogs: %w", err)
 	}
 	stdcopy.StdCopy(os.Stdout, os.Stderr, out)
 	return nil
