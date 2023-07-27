@@ -99,6 +99,8 @@ func (c *dockerClient) Execute(ctx context.Context, args cmd.Args) error {
 	if err := args.Valid(); err != nil {
 		return err
 	}
+
+	// 根据传入得参数构建出要执行编译命令
 	target, ok := cmd.Get(args.Organization)
 	fmt.Printf("org:%s value:%+v\n", args.Organization, target)
 	if !ok {
@@ -177,11 +179,11 @@ func (c *dockerClient) Execute(ctx context.Context, args cmd.Args) error {
 	}()
 
 	// 等待容器完成并退出,获取退出码
-	wait, werr := c.cli.ContainerWait(ctx, name, container.WaitConditionNotRunning)
+	wait, cwerr := c.cli.ContainerWait(ctx, name, container.WaitConditionNotRunning)
 	select {
 	case w := <-wait:
 		fmt.Printf("ContainerWait: %+v\n", w)
-	case e := <-werr:
+	case e := <-cwerr:
 		return fmt.Errorf("ContainerWait: %w", e)
 	}
 
